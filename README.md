@@ -1,75 +1,75 @@
 # dsh-session-cleaner
 
-A DeepSeek Harness dynamic Cordis plugin: manage and delete conversation records from the Web GUI settings page.
+DeepSeek Harness 动态 Cordis 插件：在 Web GUI 设置页中管理并删除对话记录。
 
-[中文文档](README.zh-CN.md)
+[English](README.en.md)
 
-## Features
+## 功能
 
-- **Delete a whole session**: archives the session and physically removes its durable log (JSONL directory), and cleans up that session's message-feedback data.
-- **Delete individual records**: conversations are grouped by user message; deleting a user message cascades to all assistant replies and tool messages it triggered.
-- **Grouped browsing**: in the settings page "会话管理" (Session Manager), click a user message to expand the assistant/tool messages it triggered; each child message can be deleted individually.
-- **Safety guard**: running sessions and the current session cannot be deleted (enforced on the Host side).
+- **删除整个会话**：归档会话并物理删除其持久化日志（JSONL 目录），同时清理该会话的消息反馈数据。
+- **删除单条对话记录**：按用户消息分组展示对话内容；删除一条用户消息会级联删除它引发的所有助手回复与工具消息。
+- **分组查看**：设置页「会话管理」中，点击一条用户消息可展开其引发的助手/工具消息，子消息可单独删除。
+- **安全边界**：运行中的会话与当前会话不可删除（Host 端校验）。
 
-## Requirements
+## 运行环境
 
-- [DeepSeek Harness](https://github.com/deepseek-ai/DeepSeek-Harness) Web GUI (`dsh web`).
-- This plugin loads through DSH's **dynamic Cordis plugin** mechanism (`cordis_define` / `cordis_run`) — no DSH source changes. It is a per-process extension and must be reloaded after a DSH restart.
+- [DeepSeek Harness](https://github.com/deepseek-ai/DeepSeek-Harness) Web GUI（`dsh web`）
+- 本插件通过 DSH 的**动态 Cordis 插件**机制加载（`cordis_define` / `cordis_run`），无需修改 DSH 源码，进程重启后需重新加载。
 
-## Installation
+## 安装
 
-### Prerequisites
+### 前提
 
-- The DeepSeek Harness Web GUI is running (`dsh web`).
-- This repository is cloned (or you have the contents of `host.js` / `client.js` at hand).
-- The agent in the target session has the dynamic Cordis plugin tools (`cordis_define` / `cordis_run` / `cordis_inspect_*`).
+- 已启动 DeepSeek Harness Web GUI（`dsh web`）。
+- 克隆本仓库（或记下 `host.js` / `client.js` 的内容）。
+- 目标会话的代理可用动态 Cordis 插件工具（`cordis_define` / `cordis_run` / `cordis_inspect_*`）。
 
-### Option 1: let the DSH agent install it (recommended)
+### 方式一：让 DSH 代理自动安装（推荐）
 
-Send the following prompt in a new session:
+在新会话中发送以下提示词：
 
 ```text
-Use the dynamic Cordis plugin tools to install https://github.com/haoranwang0921/dsh-session-cleaner :
-1. Read host.js and client.js from the repository (web_fetch, or git clone into the workspace and read).
-2. Run cordis_inspect_list and cordis_inspect_query to confirm the runtime Host/Client services and Slots (follow the cordis-plugin-development skill flow).
-3. Use cordis_define to create a new plugin: code.host = the body of host.js, code.client = the body of client.js.
-4. Run the plugin with cordis_run; if it returns awaiting-approval, approve it on the Run card.
-5. After success, report the plugin ID and point the user to "Settings → 会话管理" (Session Manager).
+请使用动态 Cordis 插件工具安装 https://github.com/haoranwang0921/dsh-session-cleaner ：
+1. 读取仓库中的 host.js 与 client.js（用 web_fetch 或 git 克隆到工作区后 read）。
+2. 调用 cordis_inspect_list 与 cordis_inspect_query 确认运行时的 Host/Client 服务与 Slots（按 cordis-plugin-development 技能的流程）。
+3. 用 cordis_define 新建插件：code.host 为 host.js 的函数体，code.client 为 client.js 的函数体。
+4. cordis_run 运行插件；若返回 awaiting-approval，在 Run 卡片上批准。
+5. 运行成功后报告插件 ID，并说明前往「设置 → 会话管理」使用。
 ```
 
-The agent completes creation, activation, and approval following the `cordis-plugin-development` skill.
+代理会按 `cordis-plugin-development` 技能的标准流程完成创建、运行与授权。
 
-### Option 2: install manually through the tools
+### 方式二：手动通过工具安装
 
-1. Read `host.js` and `client.js`; take each file's `return { ... }` function body (the header comments are plain comments and may be included).
-2. Call `cordis_define`:
-   - `plugin.kind: "new"`, an `idPrefix` of your choice, 3–6 lowercase letters (e.g. `sessd`);
-   - `code.host` = the body of `host.js`; `code.client` = the body of `client.js`.
-3. Note the returned `pluginId` and `packageId`, then call `cordis_run` (mode `run`).
-4. If it returns `awaiting-approval`, approve the run on the Run card.
-5. Open **Settings → 会话管理** (Session Manager).
+1. 读取 `host.js` 与 `client.js`，取每个文件中 `return { ... }` 函数体部分（文件头注释是普通注释，包含无妨）。
+2. 调用 `cordis_define`：
+   - `plugin.kind: "new"`，`idPrefix` 自选 3–6 位小写字母（如 `sessd`）；
+   - `code.host` = `host.js` 的函数体；`code.client` = `client.js` 的函数体。
+3. 记录返回的 `pluginId` 与 `packageId`，调用 `cordis_run`（mode `run`）。
+4. 若返回 `awaiting-approval`，在 Run 卡片上批准本次运行。
+5. 打开 **设置 → 会话管理** 使用。
 
-### Updating to a new version
+### 更新到新版本
 
-- After changing the code, use `cordis_define` (`plugin.kind: "existing"` + the original `pluginId`) to append a new Package, then switch with `cordis_run` mode `update`.
-- Rollback: `cordis_run` mode `run` + `currentPackageId`.
-- Disable: `cordis_stop`; remove permanently: `cordis_undefine`.
+- 修改代码后，用 `cordis_define`（`plugin.kind: "existing"` + 原 `pluginId`）追加新 Package，再用 `cordis_run` mode `update` 切换。
+- 回滚：`cordis_run` mode `run` + `currentPackageId`。
+- 停用：`cordis_stop`；永久删除：`cordis_undefine`。
 
-> Note: a dynamic plugin is a temporary per-process extension; after a DSH restart, reload it by repeating the steps above.
+> 注意：动态插件是进程内临时扩展，DSH 重启后需要重新加载（重新执行上面的步骤）。
 
-## Deletion semantics (important)
+## 删除语义（重要）
 
-DSH session logs are **append-only**:
+DSH 会话日志是 **append-only** 的：
 
-- **Deleting a whole session**: physically removes the session's log directory — its records are gone for good (except content-addressed shared attachments).
-- **Deleting a single message**: removes the target from the **model context** via the surface-replace mechanism (same semantics as `/compact`), but the original events remain in the log and in the human transcript; the message disappears from this plugin's list.
+- **删除整个会话**：物理删除该会话的日志目录，记录彻底移除（内容寻址的共享附件除外）。
+- **删除单条消息**：通过 surface replace 机制把目标消息从**模型上下文**移除（与 `/compact` 压缩同款语义），但原始事件仍保留在日志与人类转录中；本插件列表中该消息会消失。
 
-## File layout
+## 文件结构
 
-- `host.js` — Host half: the `delete-session` / `list-messages` / `delete-message` RPC handlers.
-- `client.js` — Browser half: the settings-page "Session Manager" grouped view and styles.
-- `LICENSE` — Apache-2.0.
+- `host.js` — Host 端：`delete-session` / `list-messages` / `delete-message` 三个 RPC handler。
+- `client.js` — 浏览器端：设置页「会话管理」分组视图与样式。
+- `LICENSE` — Apache-2.0。
 
-## Disclaimer
+## 免责声明
 
-Deletion is irreversible. Confirm the target session/message before acting; the author is not responsible for data loss.
+删除操作不可逆。请在操作前确认目标会话/消息；作者不对数据丢失负责。
