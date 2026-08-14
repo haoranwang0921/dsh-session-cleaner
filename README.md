@@ -16,12 +16,44 @@ DeepSeek Harness 动态 Cordis 插件：在 Web GUI 设置页中管理并删除�
 
 ## 安装
 
-1. 启动 DSH Web GUI。
-2. 在会话中使用动态插件工具提交本仓库的 `host.js` 与 `client.js` 作为 `code.host` / `code.client`。
-3. 批准插件运行（Run 卡片上授权）。
-4. 打开 **设置 → 会话管理** 使用。
+### 前提
 
-> 也可以先请求 `cordis-plugin-development` 技能，再让代理按上述文件内容创建并运行插件。
+- 已启动 DeepSeek Harness Web GUI（`dsh web`）。
+- 克隆本仓库（或记下 `host.js` / `client.js` 的内容）。
+- 目标会话的代理可用动态 Cordis 插件工具（`cordis_define` / `cordis_run` / `cordis_inspect_*`）。
+
+### 方式一：让 DSH 代理自动安装（推荐）
+
+在新会话中发送以下提示词：
+
+```text
+请使用动态 Cordis 插件工具安装 https://github.com/haoranwang0921/dsh-session-cleaner ：
+1. 读取仓库中的 host.js 与 client.js（用 web_fetch 或 git 克隆到工作区后 read）。
+2. 调用 cordis_inspect_list 与 cordis_inspect_query 确认运行时的 Host/Client 服务与 Slots（按 cordis-plugin-development 技能的流程）。
+3. 用 cordis_define 新建插件：code.host 为 host.js 的函数体，code.client 为 client.js 的函数体。
+4. cordis_run 运行插件；若返回 awaiting-approval，在 Run 卡片上批准。
+5. 运行成功后报告插件 ID，并说明前往「设置 → 会话管理」使用。
+```
+
+代理会按 `cordis-plugin-development` 技能的标准流程完成创建、运行与授权。
+
+### 方式二：手动通过工具安装
+
+1. 读取 `host.js` 与 `client.js`，取每个文件中 `return { ... }` 函数体部分（不含文件头注释的说明文字也可，头注释是普通注释，包含无妨）。
+2. 调用 `cordis_define`：
+   - `plugin.kind: "new"`，`idPrefix` 自选 3–6 位小写字母（如 `sessd`）；
+   - `code.host` = `host.js` 的函数体；`code.client` = `client.js` 的函数体。
+3. 记录返回的 `pluginId` 与 `packageId`，调用 `cordis_run`（mode `run`）。
+4. 若返回 `awaiting-approval`，在 Run 卡片上批准本次运行。
+5. 打开 **设置 → 会话管理** 使用。
+
+### 更新到新版本
+
+- 修改代码后，用 `cordis_define`（`plugin.kind: "existing"` + 原 `pluginId`）追加新 Package，再用 `cordis_run` mode `update` 切换。
+- 回滚：`cordis_run` mode `run` + `currentPackageId`。
+- 停用：`cordis_stop`；永久删除：`cordis_undefine`。
+
+> 注意：动态插件是进程内临时扩展，DSH 重启后需要重新加载（重新执行上面的步骤）。
 
 ## 删除语义（重要）
 
