@@ -34,7 +34,7 @@ DSH 会话日志是 **append-only** 的：
 
 - `host.js` — Host 端：`delete-session` / `list-messages` / `delete-message` 三个 RPC handler。
 - `client.js` — 浏览器端：设置页「会话管理」分组视图与样式。
-- `LICENSE` — MIT。
+- `LICENSE` — Apache-2.0。
 
 ## 免责声明
 
