@@ -1,6 +1,6 @@
 # dsh-session-cleaner
 
-A DeepSeek Harness dynamic Cordis plugin: manage and delete conversation records from the Web GUI settings page.
+A DeepSeek Harness Web GUI plugin: manage and delete conversation records from the settings page.
 
 [中文](README.md)
 
@@ -14,48 +14,36 @@ A DeepSeek Harness dynamic Cordis plugin: manage and delete conversation records
 ## Requirements
 
 - [DeepSeek Harness](https://github.com/deepseek-ai/DeepSeek-Harness) Web GUI (`dsh web`).
-- This plugin loads through DSH's **dynamic Cordis plugin** mechanism (`cordis_define` / `cordis_run`) — no DSH source changes. It is a per-process extension and must be reloaded after a DSH restart.
 
-## Installation
+## Installation (first-class plugin, loads automatically on startup)
 
-### Prerequisites
+This repository is a **dual-face plugin package**: the node half runs in the host process (`/api/session-cleaner` routes), and the browser half loads into the Web GUI through the `dsh.client` declaration.
 
-- The DeepSeek Harness Web GUI is running (`dsh web`).
-- This repository is cloned (or you have the contents of `host.js` / `client.js` at hand).
-- The agent in the target session has the dynamic Cordis plugin tools (`cordis_define` / `cordis_run` / `cordis_inspect_*`).
+```powershell
+# 1. Install into the profile (link path for local development; package name after npm publish)
+dsh plugin --profile web add link:C:\path\to\dsh-session-cleaner
 
-### Option 1: let the DSH agent install it (recommended)
-
-Send the following prompt in a new session:
-
-```text
-Use the dynamic Cordis plugin tools to install https://github.com/haoranwang0921/dsh-session-cleaner :
-1. Read host.js and client.js from the repository (web_fetch, or git clone into the workspace and read).
-2. Run cordis_inspect_list and cordis_inspect_query to confirm the runtime Host/Client services and Slots (follow the cordis-plugin-development skill flow).
-3. Use cordis_define to create a new plugin: code.host = the body of host.js, code.client = the body of client.js.
-4. Run the plugin with cordis_run; if it returns awaiting-approval, approve it on the Run card.
-5. After success, report the plugin ID and point the user to "Settings → 会话管理" (Session Manager).
+# 2. Restart dsh web
+dsh web
 ```
 
-The agent completes creation, activation, and approval following the `cordis-plugin-development` skill.
+After installation the plugin loads automatically with every DSH startup — **no re-install needed**. Entry point: **Settings → 会话管理** (Session Manager).
 
-### Option 2: install manually through the tools
+Code updates need no rebuild (plain JavaScript); just restart `dsh web`.
 
-1. Read `host.js` and `client.js`; take each file's `return { ... }` function body (the header comments are plain comments and may be included).
-2. Call `cordis_define`:
-   - `plugin.kind: "new"`, an `idPrefix` of your choice, 3–6 lowercase letters (e.g. `sessd`);
-   - `code.host` = the body of `host.js`; `code.client` = the body of `client.js`.
-3. Note the returned `pluginId` and `packageId`, then call `cordis_run` (mode `run`).
-4. If it returns `awaiting-approval`, approve the run on the Run card.
-5. Open **Settings → 会话管理** (Session Manager).
+### How it works
 
-### Updating to a new version
+- `cordis.patch.yml` (the `dsh.bundle.patch` manifest) inserts one `session-cleaner` plugin row into the profile composition.
+- The `dsh.client` declaration in `package.json` loads the browser half from `/plugins/<id>/client.js`; `exports["./client"]` points at the bundle.
+- The node half registers `/api/session-cleaner/*` routes (loopback-only) through `webServer`; the browser half calls them via `fetch`.
 
-- After changing the code, use `cordis_define` (`plugin.kind: "existing"` + the original `pluginId`) to append a new Package, then switch with `cordis_run` mode `update`.
-- Rollback: `cordis_run` mode `run` + `currentPackageId`.
-- Disable: `cordis_stop`; remove permanently: `cordis_undefine`.
+## Uninstall / update
 
-> Note: a dynamic plugin is a temporary per-process extension; after a DSH restart, reload it by repeating the steps above.
+```powershell
+dsh plugin --profile web remove @haoranwang0921/dsh-session-cleaner
+```
+
+Or edit `$DSH_HOME/cordis.patch.yml` / the profile's `cordis.patch.yml` to disable or delete the `session-cleaner` row.
 
 ## Deletion semantics (important)
 
@@ -66,8 +54,10 @@ DSH session logs are **append-only**:
 
 ## File layout
 
-- `host.js` — Host half: the `delete-session` / `list-messages` / `delete-message` RPC handlers.
-- `client.js` — Browser half: the settings-page "Session Manager" grouped view and styles.
+- `lib/index.js` — node half (Host): the `/api/session-cleaner/*` routes and deletion logic.
+- `lib/client.js` — browser half: the settings-page "Session Manager" grouped view.
+- `cordis.patch.yml` — bundle patch (inserts the plugin row into the profile).
+- `dynamic/` — the legacy dynamic Cordis plugin form (`cordis_define` / `cordis_run` loading, lost on DSH restart), kept for reference.
 - `LICENSE` — Apache-2.0.
 
 ## Disclaimer

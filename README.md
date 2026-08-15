@@ -1,6 +1,6 @@
 # dsh-session-cleaner
 
-DeepSeek Harness 动态 Cordis 插件：在 Web GUI 设置页中管理并删除对话记录。
+DeepSeek Harness Web GUI 插件：在设置页中管理并删除对话记录。
 
 [English](README.en.md)
 
@@ -13,49 +13,37 @@ DeepSeek Harness 动态 Cordis 插件：在 Web GUI 设置页中管理并删除�
 
 ## 运行环境
 
-- [DeepSeek Harness](https://github.com/deepseek-ai/DeepSeek-Harness) Web GUI（`dsh web`）
-- 本插件通过 DSH 的**动态 Cordis 插件**机制加载（`cordis_define` / `cordis_run`），无需修改 DSH 源码，进程重启后需重新加载。
+- [DeepSeek Harness](https://github.com/deepseek-ai/DeepSeek-Harness) Web GUI（`dsh web`）。
 
-## 安装
+## 安装（正式插件，随 DSH 启动自动加载）
 
-### 前提
+本仓库是一个 **dual-face 插件包**：node half 运行在宿主进程（`/api/session-cleaner` 路由），browser half 通过 `dsh.client` 声明加载进 Web GUI。
 
-- 已启动 DeepSeek Harness Web GUI（`dsh web`）。
-- 克隆本仓库（或记下 `host.js` / `client.js` 的内容）。
-- 目标会话的代理可用动态 Cordis 插件工具（`cordis_define` / `cordis_run` / `cordis_inspect_*`）。
+```powershell
+# 1. 安装到 profile（本地开发用 link 路径；或发布 npm 后用包名）
+dsh plugin --profile web add link:C:\path\to\dsh-session-cleaner
 
-### 方式一：让 DSH 代理自动安装（推荐）
-
-在新会话中发送以下提示词：
-
-```text
-请使用动态 Cordis 插件工具安装 https://github.com/haoranwang0921/dsh-session-cleaner ：
-1. 读取仓库中的 host.js 与 client.js（用 web_fetch 或 git 克隆到工作区后 read）。
-2. 调用 cordis_inspect_list 与 cordis_inspect_query 确认运行时的 Host/Client 服务与 Slots（按 cordis-plugin-development 技能的流程）。
-3. 用 cordis_define 新建插件：code.host 为 host.js 的函数体，code.client 为 client.js 的函数体。
-4. cordis_run 运行插件；若返回 awaiting-approval，在 Run 卡片上批准。
-5. 运行成功后报告插件 ID，并说明前往「设置 → 会话管理」使用。
+# 2. 重启 dsh web
+dsh web
 ```
 
-代理会按 `cordis-plugin-development` 技能的标准流程完成创建、运行与授权。
+安装后插件随 DSH 启动自动加载，**无需每次重新安装**。使用入口：**设置 → 会话管理**。
 
-### 方式二：手动通过工具安装
+更新代码后无需重新构建（本仓库为纯 JS），重启 `dsh web` 即可。
 
-1. 读取 `host.js` 与 `client.js`，取每个文件中 `return { ... }` 函数体部分（文件头注释是普通注释，包含无妨）。
-2. 调用 `cordis_define`：
-   - `plugin.kind: "new"`，`idPrefix` 自选 3–6 位小写字母（如 `sessd`）；
-   - `code.host` = `host.js` 的函数体；`code.client` = `client.js` 的函数体。
-3. 记录返回的 `pluginId` 与 `packageId`，调用 `cordis_run`（mode `run`）。
-4. 若返回 `awaiting-approval`，在 Run 卡片上批准本次运行。
-5. 打开 **设置 → 会话管理** 使用。
+### 工作原理
 
-### 更新到新版本
+- `cordis.patch.yml`（`dsh.bundle.patch`）向 profile 组合插入一行 `session-cleaner` 插件。
+- `package.json` 的 `dsh.client` 声明让浏览器半从 `/plugins/<id>/client.js` 加载；`exports["./client"]` 指向 bundle。
+- node half 通过 `webServer` 注册 `/api/session-cleaner/*` 路由（仅回环访问），浏览器半通过 `fetch` 调用。
 
-- 修改代码后，用 `cordis_define`（`plugin.kind: "existing"` + 原 `pluginId`）追加新 Package，再用 `cordis_run` mode `update` 切换。
-- 回滚：`cordis_run` mode `run` + `currentPackageId`。
-- 停用：`cordis_stop`；永久删除：`cordis_undefine`。
+## 卸载 / 更新
 
-> 注意：动态插件是进程内临时扩展，DSH 重启后需要重新加载（重新执行上面的步骤）。
+```powershell
+dsh plugin --profile web remove @haoranwang0921/dsh-session-cleaner
+```
+
+或直接编辑 `$DSH_HOME/cordis.patch.yml` / profile 的 `cordis.patch.yml`，把 `session-cleaner` 行禁用或删除。
 
 ## 删除语义（重要）
 
@@ -66,8 +54,10 @@ DSH 会话日志是 **append-only** 的：
 
 ## 文件结构
 
-- `host.js` — Host 端：`delete-session` / `list-messages` / `delete-message` 三个 RPC handler。
-- `client.js` — 浏览器端：设置页「会话管理」分组视图与样式。
+- `lib/index.js` — node half（Host 端）：`/api/session-cleaner/*` 路由与删除逻辑。
+- `lib/client.js` — browser half：设置页「会话管理」分组视图。
+- `cordis.patch.yml` — bundle patch（向 profile 插入插件行）。
+- `dynamic/` — 旧版动态 Cordis 插件格式（`cordis_define` / `cordis_run` 加载，DSH 重启后需重新加载），保留作参考。
 - `LICENSE` — Apache-2.0。
 
 ## 免责声明
