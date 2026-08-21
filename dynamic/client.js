@@ -113,7 +113,7 @@ function SessionCleaner(props) {
     try {
       const result = await props.listMessages(id)
       if (result && result.ok === true) {
-        const visible = (result.messages || []).filter(m => !(m.source === 'plugin' && m.sourcePlugin === 'sessdel'))
+        const visible = (result.messages || []).filter(m => !(m.source === 'plugin' && m.sourcePlugin === 'dsh-session-cleaner'))
         setMessages(prev => ({ ...prev, [id]: visible }))
       } else {
         setMsgError((result && (result.message || result.error)) || '读取消息失败')

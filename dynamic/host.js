@@ -156,7 +156,7 @@ return {
             id: 'sessdel-' + now + '-' + seq,
             role: 'user',
             content: [{ type: 'text', text: '（此条对话记录已删除）' }],
-            source: { kind: 'plugin', plugin: 'sessdel', form: 'notice', summary: '此条对话记录已删除' },
+            source: { kind: 'plugin', plugin: 'dsh-session-cleaner', form: 'notice', summary: '此条对话记录已删除' },
           }
         : {
             turn: target.data.turn,
@@ -165,7 +165,7 @@ return {
               id: 'sessdel-' + now + '-' + seq,
               role: 'assistant',
               content: [{ type: 'text', text: '（此条对话记录已删除）' }],
-              source: { kind: 'model', provider: 'sessdel', model: 'deleted' },
+              source: { kind: 'model', provider: 'dsh-session-cleaner', model: 'deleted' },
             },
           }
       const intent = { surfaceOp: { op: 'replace', start, end }, sourceEventSeqs: shadowedSeqs }
