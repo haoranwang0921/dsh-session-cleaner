@@ -108,6 +108,11 @@ return {
 
       const sessions = ctx.get('sessions')
       const persistence = ctx.get('sessionPersistence')
+      // Live sessions are off-limits for message deletion too (same policy as
+      // delete-session): appending while the agent loop writes would race.
+      if (sessions !== undefined && sessions.get(sessionId) !== undefined) {
+        return { ok: false, error: 'live-session', message: '该会话正在运行，无法删除其中的消息；请先关闭或等待其结束' }
+      }
       if (persistence === undefined) {
         return { ok: false, error: 'no-persistence', message: '会话持久化服务不可用' }
       }
@@ -166,22 +171,14 @@ return {
       const intent = { surfaceOp: { op: 'replace', start, end }, sourceEventSeqs: shadowedSeqs }
 
       try {
-        const live = sessions !== undefined ? sessions.get(sessionId) : undefined
-        if (live !== undefined) {
-          live.append(target.type, placeholder, intent)
-          await sessions.flush(live)
-        } else {
-          const event = {
-            type: target.type,
-            // Seq must not collide with existing events even if the log has gaps.
-            seq: events.reduce((max, e) => (typeof e.seq === 'number' && e.seq > max ? e.seq : max), -1) + 1,
-            time: now,
-            data: placeholder,
-            surfaceOp: intent.surfaceOp,
-            sourceEventSeqs: intent.sourceEventSeqs,
-          }
-          await persistence.append(sessionId, [event])
-        }
+        await persistence.append(sessionId, [{
+          type: target.type,
+          seq: events.reduce((max, e) => (typeof e.seq === 'number' && e.seq > max ? e.seq : max), -1) + 1,
+          time: now,
+          data: placeholder,
+          surfaceOp: intent.surfaceOp,
+          sourceEventSeqs: intent.sourceEventSeqs,
+        }])
       } catch (error) {
         return { ok: false, error: 'append-failed', message: '删除失败：' + String(error) }
       }
