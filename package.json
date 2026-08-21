@@ -1,6 +1,6 @@
 {
   "name": "@haoranwang0921/dsh-session-cleaner",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "dsh web GUI plugin: manage and delete conversation records (whole sessions or individual messages, cascade delete) from the settings page. Dual-face: node half serves /api/session-cleaner routes, browser half registers the settings-page view.",
   "type": "module",
   "engines": {
@@ -11,6 +11,9 @@
     ".": "./lib/index.js",
     "./client": "./lib/client.js",
     "./package.json": "./package.json"
+  },
+  "scripts": {
+    "test": "vitest run"
   },
   "dsh": {
     "bundle": {
@@ -40,5 +43,8 @@
     "@deepseek-ai/dsh-message-feedback": "^0.1.0-rc.6",
     "@deepseek-ai/dsh-system-prompt": "^0.1.0-rc.6",
     "react": "^18.2.0"
+  },
+  "devDependencies": {
+    "vitest": "^3.0.0"
   }
 }
