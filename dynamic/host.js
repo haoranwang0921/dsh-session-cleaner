@@ -173,7 +173,8 @@ return {
         } else {
           const event = {
             type: target.type,
-            seq: events.length,
+            // Seq must not collide with existing events even if the log has gaps.
+            seq: events.reduce((max, e) => (typeof e.seq === 'number' && e.seq > max ? e.seq : max), -1) + 1,
             time: now,
             data: placeholder,
             surfaceOp: intent.surfaceOp,
