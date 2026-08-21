@@ -80,9 +80,10 @@ return {
         return { ok: false, error: 'read-failed', message: String(error) }
       }
       const events = inspection.events || []
+      const bySeq = indexEventsBySeq(events)
       const nodes = foldSurfaceNodes(events)
       const messages = nodes.map(seq => {
-        const event = events.find(e => e.seq === seq)
+        const event = bySeq.get(seq)
         if (event === undefined) return null
         const role = event.type === 'user/message' ? 'user'
           : event.type === 'assistant/message' ? 'assistant'
@@ -123,12 +124,13 @@ return {
         return { ok: false, error: 'read-failed', message: String(error) }
       }
       const events = inspection.events || []
+      const bySeq = indexEventsBySeq(events)
       const nodes = foldSurfaceNodes(events)
       const idx = nodes.indexOf(seq)
       if (idx === -1) {
         return { ok: false, error: 'not-on-surface', message: '该消息不在当前对话表面（可能已被删除）' }
       }
-      const target = events.find(e => e.seq === seq)
+      const target = bySeq.get(seq)
       if (target === undefined || (target.type !== 'user/message' && target.type !== 'assistant/message')) {
         return { ok: false, error: 'unsupported-type', message: '只能删除用户或助手消息' }
       }
@@ -140,7 +142,7 @@ return {
         shadowedSeqs = [seq]
         for (let i = idx + 1; i < nodes.length; i++) {
           const s = nodes[i]
-          const ev = events.find(e => e.seq === s)
+          const ev = bySeq.get(s)
           if (ev !== undefined && ev.type === 'user/message') break
           shadowedSeqs.push(s)
         }
@@ -217,6 +219,13 @@ return {
         console.error('session-delete spawn failed', error)
         return -1
       }
+    }
+
+    // O(1) seq -> event lookup index (replaces repeated events.find scans).
+    function indexEventsBySeq(events) {
+      const bySeq = new Map()
+      for (const event of events) bySeq.set(event.seq, event)
+      return bySeq
     }
 
     // 折叠表面：返回当前仍在模型表面上的事件 seq（按表面顺序）。
