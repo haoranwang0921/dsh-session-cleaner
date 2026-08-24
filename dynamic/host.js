@@ -29,15 +29,37 @@ return {
 
       const registry = ctx.get('workspaceRegistry')
       if (registry !== undefined) {
-        try { await registry.archiveSession(sessionId) } catch {}
+        try {
+          await registry.archiveSession(sessionId)
+        } catch (error) {
+          return { ok: false, error: 'archive-failed', message: '归档会话失败：' + String(error) + '；未执行物理删除，会话状态保持一致' }
+        }
       }
 
       let location
-      try { location = persistence.locate(meta) } catch { location = undefined }
+      try { location = persistence.locate(meta) } catch (error) {
+        return { ok: true, sessionId, warnings: ['locate-failed: ' + String(error)] }
+      }
       if (location !== undefined && location.path !== undefined) {
         const filePath = String(location.path)
         const dir = filePath.replace(/[\\/][^\\/]*$/, '')
         if (dir !== '' && dir !== '/' && dir !== '.') {
+          // Path fence: refuse to remove directories outside the session root.
+          const locateRoot = typeof persistence.locateRoot === 'function'
+            ? (() => { try { return persistence.locateRoot() } catch { return undefined } })()
+            : undefined
+          const rootWarn = locateRoot === undefined
+            ? 'persistence does not expose locateRoot; path fence skipped'
+            : null
+          const inTree = locateRoot === undefined
+            || (() => {
+              const rootResolved = String(locateRoot).replace(/[\\/]+$/, '')
+              const dirResolved = dir.replace(/[\\/]+$/, '')
+              return (dirResolved + '/').startsWith(rootResolved + '/')
+            })()
+          if (!inTree) {
+            return { ok: false, error: 'unsafe-location', message: '持久化返回的目录不在会话数据根目录之内，已中止物理删除' }
+          }
           const subprocess = ctx.get('subprocess')
           if (subprocess === undefined) {
             return { ok: false, error: 'no-subprocess', message: '子进程服务不可用，无法删除日志文件' }
@@ -45,6 +67,9 @@ return {
           const code = await runDelete(subprocess, dir)
           if (code !== 0) {
             return { ok: false, error: 'delete-failed', message: '删除日志文件失败（退出码 ' + code + '），会话已归档但记录仍在磁盘上' }
+          }
+          if (rootWarn !== null) {
+            return { ok: true, sessionId, warnings: [rootWarn] }
           }
         }
       }
