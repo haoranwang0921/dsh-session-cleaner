@@ -190,6 +190,32 @@ describe('delete-session', () => {
     expect(res.statusCode).toBe(500)
     expect(res.json().error).toBe('list-failed')
   })
+
+  it('refuses delete when the session agent is actively running (409)', async () => {
+    const services = defaultServices()
+    services.agents = { get: (id) => ({ status: 'running' }) }
+    const { ctx, routes } = makeCtx(services)
+    apply(ctx)
+    const res = await call(routes, '/api/session-cleaner/delete-session', makeReq({ body: { sessionId: 's-1' } }))
+    expect(res.statusCode).toBe(409)
+    expect(res.json().error).toBe('live-session')
+  })
+
+  it('allows delete when the session is live but its agent is idle', async () => {
+    const services = defaultServices()
+    // The session remains in the live store, but its agent is not running —
+    // exactly the previously-stuck "used once, now idle" case.
+    services.sessions = { get: (id) => ({ id }) }
+    services.agents = { get: (id) => ({ status: 'idle' }) }
+    let archived
+    services.workspaceRegistry = { archiveSession: async (id) => { archived = id } }
+    const { ctx, routes } = makeCtx(services)
+    apply(ctx)
+    const res = await call(routes, '/api/session-cleaner/delete-session', makeReq({ body: { sessionId: 's-1' } }))
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toMatchObject({ ok: true, sessionId: 's-1' })
+    expect(archived).toBe('s-1')
+  })
 })
 
 describe('list-messages', () => {
