@@ -53,8 +53,9 @@ return {
             : null
           const inTree = locateRoot === undefined
             || (() => {
-              const rootResolved = String(locateRoot).replace(/[\\/]+$/, '')
-              const dirResolved = dir.replace(/[\\/]+$/, '')
+              const normalize = (s) => String(s).replace(/[\\/]+/g, '/').replace(/[\\/]+$/, '')
+              const rootResolved = normalize(locateRoot)
+              const dirResolved = normalize(dir)
               return (dirResolved + '/').startsWith(rootResolved + '/')
             })()
           if (!inTree) {
