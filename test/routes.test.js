@@ -55,6 +55,8 @@ function defaultServices() {
     sessionPersistence: {
       list: async () => [{ id: 's-1' }, { id: 's-2' }],
       locate: (meta) => ({ path: `/data/sessions/${meta.id}/log.jsonl` }),
+      // Path-fence root (B2). Paths returned by locate() must be inside this.
+      locateRoot: () => '/data/sessions',
       inspect: async (sessionId) => ({ events: fixtureEvents() }),
       append: async () => {},
       rmCalls: undefined,
@@ -189,6 +191,63 @@ describe('delete-session', () => {
     const res = await call(routes, '/api/session-cleaner/delete-session', makeReq({ body: { sessionId: 's-1' } }))
     expect(res.statusCode).toBe(500)
     expect(res.json().error).toBe('list-failed')
+  })
+
+  it('returns 500 archive-failed and skips the rm when archiveSession throws (regression for B3)', async () => {
+    const services = defaultServices()
+    let archived = false
+    let rmAttempted = false
+    services.workspaceRegistry = {
+      archiveSession: async () => { archived = true; throw new Error('archive backend down') },
+    }
+    services.fsRm = async () => { rmAttempted = true }
+    const { ctx, routes } = makeCtx(services)
+    apply(ctx)
+    const res = await call(routes, '/api/session-cleaner/delete-session', makeReq({ body: { sessionId: 's-1' } }))
+    expect(res.statusCode).toBe(500)
+    const body = res.json()
+    expect(body.ok).toBe(false)
+    expect(body.error).toBe('archive-failed')
+    expect(archived).toBe(true)
+    expect(rmAttempted).toBe(false)
+  })
+
+  it('returns 500 unsafe-location when locate() returns a path outside the session root (regression for B2)', async () => {
+    const services = defaultServices()
+    services.sessionPersistence.locate = () => ({ path: '/etc/passwd' })
+    let rmAttempted = false
+    services.fsRm = async () => { rmAttempted = true }
+    const { ctx, routes } = makeCtx(services)
+    apply(ctx)
+    const res = await call(routes, '/api/session-cleaner/delete-session', makeReq({ body: { sessionId: 's-1' } }))
+    expect(res.statusCode).toBe(500)
+    expect(res.json().error).toBe('unsafe-location')
+    expect(rmAttempted).toBe(false)
+  })
+
+  it('skips the path fence with a warning when locateRoot is not exposed (defence-in-depth, not failure-closed)', async () => {
+    const services = defaultServices()
+    delete services.sessionPersistence.locateRoot
+    const { ctx, routes } = makeCtx(services)
+    apply(ctx)
+    const res = await call(routes, '/api/session-cleaner/delete-session', makeReq({ body: { sessionId: 's-1' } }))
+    // The default locate() returns a path inside /data/sessions, so the fence
+    // being skipped is safe for this test; we just want to confirm the warning
+    // is emitted and the response is still ok.
+    expect(res.statusCode).toBe(200)
+    expect(res.json().ok).toBe(true)
+    expect(res.json().warnings).toEqual(['persistence does not expose locateRoot; path fence skipped'])
+  })
+
+  it('surfaces locate() failures as a warning rather than silently succeeding (regression for B2 partial)', async () => {
+    const services = defaultServices()
+    services.sessionPersistence.locate = () => { throw new Error('locate crashed') }
+    const { ctx, routes } = makeCtx(services)
+    apply(ctx)
+    const res = await call(routes, '/api/session-cleaner/delete-session', makeReq({ body: { sessionId: 's-1' } }))
+    expect(res.statusCode).toBe(200)
+    expect(res.json().ok).toBe(true)
+    expect(res.json().warnings[0]).toMatch(/^locate-failed: /)
   })
 
   it('refuses delete when the session agent is actively running (409)', async () => {
